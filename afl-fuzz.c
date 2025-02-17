@@ -42,6 +42,7 @@
 #include "debug.h"
 #include "alloc-inl.h"
 #include "hash.h"
+#include "my_log.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -2011,13 +2012,15 @@ EXP_ST void init_forkserver(char** argv) {
 
   ACTF("Spinning up the fork server...");
 
+  // 在fork前，创建两个pipe，用于进程间通讯
   if (pipe(st_pipe) || pipe(ctl_pipe)) PFATAL("pipe() failed");
 
+  // fork出一个子进程
   forksrv_pid = fork();
 
   if (forksrv_pid < 0) PFATAL("fork() failed");
 
-  if (!forksrv_pid) {
+  if (!forksrv_pid) { // 子进程逻辑部分
 
     struct rlimit r;
 
@@ -2113,8 +2116,10 @@ EXP_ST void init_forkserver(char** argv) {
                            "abort_on_error=1:"
                            "allocator_may_return_null=1:"
                            "msan_track_origins=0", 0);
-
+    // 创建forkserver, 即：待测试的目标程序
+    log_print(3, "exec forkserver: %s\n", target_path);
     execv(target_path, argv);
+    // 目标程序运行成功并结束的情况下不会运行到此行
 
     /* Use a distinctive bitmap signature to tell the parent about execv()
        falling through. */
@@ -2598,8 +2603,9 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
   /* Make sure the forkserver is up before we do anything, and let's not
      count its spin-up time toward binary calibration. */
 
-  if (dumb_mode != 1 && !no_forkserver && !forksrv_pid)
+  if (dumb_mode != 1 && !no_forkserver && !forksrv_pid) {
     init_forkserver(argv);
+  }
 
   if (q->exec_cksum) {
 
@@ -7795,6 +7801,9 @@ int main(int argc, char** argv) {
   gettimeofday(&tv, &tz);
   srandom(tv.tv_sec ^ tv.tv_usec ^ getpid());
 
+  log_print(3, "%s", "Hello, AFL.");
+  printf("[*] log file: %s\n", my_log_filename);
+
   while ((opt = getopt(argc, argv, "+i:o:f:m:b:t:T:dnCB:S:M:x:QV")) > 0)
 
     switch (opt) {
@@ -8066,8 +8075,16 @@ int main(int argc, char** argv) {
     use_argv = get_qemu_argv(argv[0], argv + optind, argc - optind);
   else
     use_argv = argv + optind;
-
+  
   perform_dry_run(use_argv);
+
+  log_print(3, "in_dir = %s", in_dir);
+  log_print(3, "out_dir = %s", out_dir);
+  log_print(3, "dumb_mode = %d", dumb_mode);
+  log_print(3, "qemu_mode = %d", qemu_mode);
+  log_print(3, "no_forkserver = %d", no_forkserver);
+  printf("[*] ok\n");
+  fflush(stdout);
 
   cull_queue();
 
