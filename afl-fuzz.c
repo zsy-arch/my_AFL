@@ -5151,7 +5151,8 @@ static u8 fuzz_one(char** argv) {
   /* Skip right away if -d is given, if we have done deterministic fuzzing on
      this entry ourselves (was_fuzzed), or if it has gone through deterministic
      testing in earlier, resumed runs (passed_det). */
-
+  
+  // skip_deterministic == 1 -> 直接进行havoc阶段变异
   if (skip_deterministic || queue_cur->was_fuzzed || queue_cur->passed_det)
     goto havoc_stage;
 
